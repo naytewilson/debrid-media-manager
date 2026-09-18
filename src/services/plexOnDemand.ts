@@ -13,8 +13,10 @@ function has(title: string, pattern: RegExp): boolean {
 	return pattern.test(title);
 }
 
-function sizeScore(bytes: number, profile: PlexOnDemandProfile): number {
-	const gib = bytes / (1024 ** 3);
+// DMM stores ScrapeSearchResult.fileSize in MiB. Keep the scorer in that
+// native unit so ranking cannot silently drift from the existing max-size APIs.
+function sizeScore(fileSizeMiB: number, profile: PlexOnDemandProfile): number {
+	const gib = fileSizeMiB / 1024;
 	if (!Number.isFinite(gib) || gib <= 0) return -60;
 
 	if (profile === 'quality') {
