@@ -1,0 +1,40 @@
+name: Plex On-Demand Validation
+
+on:
+  push:
+    branches:
+      - feat/plex-on-demand-resolver-v1
+  pull_request:
+    paths:
+      - 'src/pages/api/local/plex/**'
+      - 'src/services/plexOnDemand*'
+      - 'src/services/plexWatchlist*'
+      - 'src/services/database/plexOnDemandState.ts'
+      - 'src/utils/localCapabilityAuth.ts'
+      - 'docs/PLEX_ON_DEMAND_RESOLVER.md'
+      - '.env.example'
+      - '.github/workflows/plex-on-demand.yml'
+
+concurrency:
+  group: plex-on-demand-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Focused Plex on-demand tests
+        run: npx vitest run src/services/plexOnDemand.test.ts src/services/plexWatchlist.test.ts src/services/plexOnDemandWatchlist.test.ts src/services/dmmUpstream.test.ts
