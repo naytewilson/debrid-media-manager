@@ -52,8 +52,8 @@ async function movieCandidates(imdbId: string): Promise<ScrapeSearchResult[]> {
 	]);
 
 	let results = flattenAndRemoveDuplicates([
-		...((trusted ?? []) as ScrapeSearchResult[][]),
-		...((scraped ?? []) as ScrapeSearchResult[][]),
+		(trusted ?? []) as ScrapeSearchResult[],
+		(scraped ?? []) as ScrapeSearchResult[],
 	]);
 
 	if (results.length === 0) {
