@@ -2,6 +2,12 @@
 
 This branch turns the DMM fork into the private resolution brain for the existing Plex + Real-Debrid + Zurg + media-fabric stack.
 
+## Client contract
+
+Plex remains the only user-facing request/playback surface. A title added to the account Watchlist from Apple TV, iPhone/iPad, Mac/Web, or another Plex client enters the same backend flow. Apple TV is the primary acceptance client, but completion requires the published title to behave as an ordinary Plex-library item across clients.
+
+The supported trigger is **Add to Watchlist**. This design does not claim to intercept Plex's Play button for a Discover title that Plex currently considers unavailable.
+
 ## Data path
 
 ```text
