@@ -1,5 +1,5 @@
 import { hasLocalCapability } from '@/utils/localCapabilityAuth';
-import { fetchPlexWatchlist, removeFromPlexWatchlist } from '@/services/plexWatchlist';
+import {\n\tfetchPlexWatchlist,\n\tPlexWatchlistRateLimitError,\n\tremoveFromPlexWatchlist,\n} from '@/services/plexWatchlist';
 import {
 	plexOnDemandState,
 	type PlexRequestState,
@@ -136,6 +136,11 @@ const handler: NextApiHandler = async (req, res) => {
 			nextAttemptAt: candidate.nextAttemptAt,
 		});
 	} catch (error) {
+		if (error instanceof PlexWatchlistRateLimitError) {
+			res.setHeader('Retry-After', String(error.retryAfterSeconds));
+			res.status(429).json({ error: 'plex_rate_limited' });
+			return;
+		}
 		console.error(
 			'[plex-on-demand] poll failed',
 			error instanceof Error ? error.message : 'unknown error'
