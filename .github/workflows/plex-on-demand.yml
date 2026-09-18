@@ -32,4 +32,4 @@ jobs:
       - run: npx prisma generate
       - run: npm run typecheck
       - name: Focused Plex on-demand tests
-        run: npx vitest run src/services/plexOnDemand.test.ts src/services/plexWatchlist.test.ts src/services/dmmUpstream.test.ts
+        run: npx vitest run src/services/plexOnDemand.test.ts src/services/plexWatchlist.test.ts src/services/plexOnDemandWatchlist.test.ts src/services/dmmUpstream.test.ts
