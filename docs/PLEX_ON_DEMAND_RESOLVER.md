@@ -1,16 +1,36 @@
 # Plex On-Demand Resolver V1
 
-This branch adds a private server-side DMM capability for the media-fabric stack.
+This branch turns the DMM fork into the private resolution brain for the existing Plex + Real-Debrid + Zurg + media-fabric stack.
 
-## Contract
+## Data path
 
-`POST /api/local/plex/resolve`
+```text
+Plex Watchlist
+    -> private DMM poll
+    -> DMM release corpus + Debridio cache truth
+    -> deterministic quality ranking
+    -> Real-Debrid add + feature-file selection
+    -> Zurg library-update event
+    -> media-fabric sync
+    -> scoped Plex refresh
+    -> normal Plex playback
+```
 
-Authorization:
+DMM owns Plex cloud auth and Real-Debrid credentials. media-fabric only needs the narrow local bearer capability used to trigger a poll.
 
-`Authorization: Bearer <PLEX_ON_DEMAND_SECRET>`
+## Private endpoints
 
-Body:
+### `POST /api/local/plex/poll`
+
+Polls the Plex Watchlist once and resolves at most one due movie request. State is persisted in DMM's existing `Cache` table, so restarts do not reset the queue.
+
+The first poll defaults to `baseline`: existing watchlist movies are recorded but not imported. Set `PLEX_ON_DEMAND_BOOTSTRAP=latest` for rollout to resolve only the newest existing movie, or `all` to admit the entire existing movie watchlist gradually.
+
+Removing an item from Plex removes its durable request state on the next poll. Re-adding it is therefore an intentional fresh request.
+
+### `POST /api/local/plex/resolve`
+
+Manual/private discriminator for one movie:
 
 ```json
 {
@@ -19,32 +39,42 @@ Body:
 }
 ```
 
-Profiles are `quality`, `balanced`, and `compatibility`.
+Both endpoints require:
 
-The endpoint:
+```text
+Authorization: Bearer <PLEX_ON_DEMAND_SECRET>
+```
 
-1. reads DMM's existing scraped release corpus for the IMDb title;
-2. uses Debridio as DMM already does when the title needs a first-fill or cache-marker refresh;
-3. restricts candidates to releases DMM currently knows are cached on Real-Debrid;
-4. deterministically ranks the releases;
-5. attempts at most five candidates;
-6. adds the candidate to the configured Real-Debrid account;
-7. selects playable files;
-8. requires the torrent to reach `downloaded` quickly;
-9. removes a failed/non-instant candidate before trying the next one.
+## Release policy
 
-No Real-Debrid token is accepted from the request body and no token is returned.
+Profiles: `quality`, `balanced`, `compatibility`.
+
+The resolver:
+
+1. reads the complete trusted DMM release row plus current scrape candidates;
+2. first-fills/refreshes through DMM's existing Debridio integration where configured;
+3. admits only hashes DMM currently records as Real-Debrid cached;
+4. rejects obvious CAM/telesync/screener sources;
+5. scores resolution, source, HDR/DV, audio, codec and DMM-native MiB size;
+6. attempts at most five ranked candidates;
+7. selects the largest playable video file rather than blindly selecting extras;
+8. requires the RD item to become `downloaded` quickly;
+9. deletes a failed/non-instant attempt before trying the next candidate.
 
 ## Required environment
 
 ```text
 PLEX_ON_DEMAND_SECRET=<long random secret>
+PLEX_ON_DEMAND_PLEX_TOKEN=<server-side Plex token>
 PLEX_ON_DEMAND_RD_TOKEN=<server-side Real-Debrid API token>
+PLEX_ON_DEMAND_ACCOUNT_ID=default
 PLEX_ON_DEMAND_PROFILE=quality
+PLEX_ON_DEMAND_BOOTSTRAP=baseline
+PLEX_ON_DEMAND_AUTO_REMOVE=false
 ```
 
-The endpoint should remain private to the media stack. The intended caller is the local media-fabric/Plex request bridge, not a public browser client.
+The Plex token is sent to Plex in `X-Plex-Token`, not a query string. The RD token is never accepted from a request body and neither credential is returned by these endpoints.
 
 ## Boundary
 
-This endpoint resolves media. It does not own Plex refreshes, media-fabric sync, Zurg lifecycle, or catalog authority. Those remain in the media-fabric side of the stack.
+DMM resolves and admits media. It does not own media-fabric catalog truth or Plex filesystem publication. Zurg's existing library-update hook remains the event that synchronizes media-fabric and performs the scoped Plex refresh.
