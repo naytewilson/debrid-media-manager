@@ -1,8 +1,27 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchDmmUpstreamMovie } from './dmmUpstream';
 
 describe('DMM upstream corpus fallback', () => {
-	it('uses the challenge for movie and availability reads', async () => {
+	const originalOrigin = process.env.PLEX_ON_DEMAND_UPSTREAM_DMM_ORIGIN;
+
+	afterEach(() => {
+		if (originalOrigin === undefined) {
+			delete process.env.PLEX_ON_DEMAND_UPSTREAM_DMM_ORIGIN;
+		} else {
+			process.env.PLEX_ON_DEMAND_UPSTREAM_DMM_ORIGIN = originalOrigin;
+		}
+	});
+
+	it('is disabled unless an upstream origin is explicitly configured', async () => {
+		delete process.env.PLEX_ON_DEMAND_UPSTREAM_DMM_ORIGIN;
+		const fetchMock = vi.fn();
+		const result = await fetchDmmUpstreamMovie('tt0111161', fetchMock as typeof fetch);
+		expect(result).toBeNull();
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('uses the challenge for movie and availability reads when explicitly enabled', async () => {
+		process.env.PLEX_ON_DEMAND_UPSTREAM_DMM_ORIGIN = 'https://debridmediamanager.com';
 		const calls: Array<{ url: string; init?: RequestInit }> = [];
 		const fetchMock = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
 			const url = String(input);
