@@ -3,6 +3,7 @@ import {
 	type ScrapeSearchResult,
 } from './mediasearch';
 import { rankPlexCandidates, type PlexOnDemandProfile } from './plexOnDemand';
+import { fetchDmmUpstreamMovie } from './dmmUpstream';
 import {
 	addHashAsMagnet,
 	deleteTorrent,
@@ -31,6 +32,7 @@ export type PlexResolveResult =
 			reasons: string[];
 			torrentId: string;
 			filename: string;
+			source: 'local' | 'upstream';
 	  }
 	| { status: 'no_releases'; imdbId: string }
 	| { status: 'no_cached_release'; imdbId: string; candidateCount: number }
@@ -114,21 +116,49 @@ export async function resolvePlexMovie(input: {
 	profile?: PlexOnDemandProfile;
 }): Promise<PlexResolveResult> {
 	const profile = input.profile ?? plexOnDemandProfile();
-	const candidates = await movieCandidates(input.imdbId);
-	if (candidates.length === 0) {
-		return { status: 'no_releases', imdbId: input.imdbId };
-	}
-
-	const cached = await db.filterCachedHashes(candidates.map((candidate) => candidate.hash));
-	const ranked = rankPlexCandidates(
-		candidates.filter((candidate) => cached.has(candidate.hash.toLowerCase())),
+	const localCandidates = await movieCandidates(input.imdbId);
+	const localCached = await db.filterCachedHashes(
+		localCandidates.map((candidate) => candidate.hash)
+	);
+	let ranked = rankPlexCandidates(
+		localCandidates.filter((candidate) => localCached.has(candidate.hash.toLowerCase())),
 		profile
 	);
+	let source: 'local' | 'upstream' = 'local';
+	let candidateCount = localCandidates.length;
+
 	if (ranked.length === 0) {
+		try {
+			const upstream = await fetchDmmUpstreamMovie(input.imdbId);
+			if (upstream) {
+				candidateCount = Math.max(candidateCount, upstream.candidates.length);
+				const upstreamRanked = rankPlexCandidates(
+					upstream.candidates.filter((candidate) =>
+						upstream.cachedHashes.has(candidate.hash.toLowerCase())
+					),
+					profile
+				);
+				if (upstreamRanked.length > 0) {
+					ranked = upstreamRanked;
+					source = 'upstream';
+				}
+			}
+		} catch (error) {
+			console.error(
+				'[plex-on-demand] upstream DMM fallback unavailable',
+				error instanceof Error ? error.message : 'unknown error'
+			);
+		}
+	}
+
+	if (ranked.length === 0) {
+		if (candidateCount === 0) {
+			return { status: 'no_releases', imdbId: input.imdbId };
+		}
 		return {
 			status: 'no_cached_release',
 			imdbId: input.imdbId,
-			candidateCount: candidates.length,
+			candidateCount,
 		};
 	}
 
@@ -146,6 +176,7 @@ export async function resolvePlexMovie(input: {
 				reasons: candidate.reasons,
 				torrentId: added.torrentId,
 				filename: added.filename,
+				source,
 			};
 		} catch (error) {
 			attempts.push({
