@@ -15,6 +15,10 @@ on:
       - '.env.example'
       - '.github/workflows/plex-on-demand.yml'
 
+concurrency:
+  group: plex-on-demand-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
