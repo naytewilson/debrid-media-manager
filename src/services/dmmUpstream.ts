@@ -4,7 +4,6 @@ import {
 	type ScrapeSearchResult,
 } from './mediasearch';
 
-const DEFAULT_ORIGIN = 'https://debridmediamanager.com';
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_PAGES = 2;
 const PAGE_RETRY_COUNT = 3;
@@ -27,9 +26,9 @@ export type DmmUpstreamMovie = {
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function upstreamOrigin(): string | null {
-	const raw = process.env.PLEX_ON_DEMAND_UPSTREAM_DMM_ORIGIN;
-	if (raw === 'off' || raw === 'disabled') return null;
-	return (raw || DEFAULT_ORIGIN).replace(/\/+$/, '');
+	const raw = process.env.PLEX_ON_DEMAND_UPSTREAM_DMM_ORIGIN?.trim();
+	if (!raw || raw === 'off' || raw === 'disabled') return null;
+	return raw.replace(/\/+$/, '');
 }
 
 async function getChallenge(origin: string, fetchImpl: typeof fetch): Promise<Required<Challenge>> {
