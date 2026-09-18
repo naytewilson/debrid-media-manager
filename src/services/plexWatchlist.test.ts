@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fetchPlexWatchlist, imdbIdFromPlexGuids } from './plexWatchlist';
+import {
+	fetchPlexWatchlist,
+	imdbIdFromPlexGuids,
+	removeFromPlexWatchlist,
+} from './plexWatchlist';
 
 describe('Plex watchlist client', () => {
 	it('extracts IMDb ids from Plex GUIDs', () => {
@@ -8,9 +12,15 @@ describe('Plex watchlist client', () => {
 		).toBe('tt0111161');
 	});
 
-	it('keeps the Plex token out of the request URL', async () => {
+	it('uses the current Discover watchlist API and keeps the Plex token out of the URL', async () => {
 		const fetchMock = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
 			const url = input instanceof URL ? input : new URL(String(input));
+			expect(url.origin).toBe('https://discover.provider.plex.tv');
+			expect(url.pathname).toBe('/library/sections/watchlist/all');
+			expect(url.searchParams.get('includeExternalMedia')).toBe('1');
+			expect(url.searchParams.get('includeGuids')).toBe('1');
+			expect(url.searchParams.get('sort')).toBe('watchlistedAt:desc');
+			expect(url.searchParams.get('X-Plex-Container-Size')).toBe('100');
 			expect(url.searchParams.has('X-Plex-Token')).toBe(false);
 			expect((init?.headers as Record<string, string>)['X-Plex-Token']).toBe('secret');
 			return {
@@ -44,5 +54,20 @@ describe('Plex watchlist client', () => {
 				imdbId: 'tt0111161',
 			},
 		]);
+	});
+
+	it('removes items through the Discover watchlist action without leaking the token', async () => {
+		const fetchMock = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+			const url = input instanceof URL ? input : new URL(String(input));
+			expect(url.origin).toBe('https://discover.provider.plex.tv');
+			expect(url.pathname).toBe('/actions/removeFromWatchlist');
+			expect(url.searchParams.get('ratingKey')).toBe('plex://movie/abc');
+			expect(url.searchParams.has('X-Plex-Token')).toBe(false);
+			expect(init?.method).toBe('PUT');
+			expect((init?.headers as Record<string, string>)['X-Plex-Token']).toBe('secret');
+			return { ok: true, status: 200 } as Response;
+		});
+
+		await removeFromPlexWatchlist('secret', 'plex://movie/abc', fetchMock as typeof fetch);
 	});
 });
