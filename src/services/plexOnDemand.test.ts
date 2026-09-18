@@ -3,7 +3,8 @@ import { rankPlexCandidates, scorePlexCandidate } from './plexOnDemand';
 
 const candidate = (title: string, fileSizeGiB: number, hash: string) => ({
 	title,
-	fileSize: fileSizeGiB * 1024 ** 3,
+	// DMM's scrape rows store MiB.
+	fileSize: fileSizeGiB * 1024,
 	hash,
 });
 
