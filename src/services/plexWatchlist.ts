@@ -23,8 +23,10 @@ type PlexWatchlistResponse = {
 	};
 };
 
-const WATCHLIST_URL = 'https://metadata.provider.plex.tv/library/sections/watchlist/all';
-const PAGE_SIZE = 200;
+const PLEX_DISCOVER_ORIGIN = 'https://discover.provider.plex.tv';
+const WATCHLIST_URL = `${PLEX_DISCOVER_ORIGIN}/library/sections/watchlist/all`;
+const REMOVE_FROM_WATCHLIST_URL = `${PLEX_DISCOVER_ORIGIN}/actions/removeFromWatchlist`;
+const PAGE_SIZE = 100;
 
 export function imdbIdFromPlexGuids(guids: PlexGuid[] | undefined): string | undefined {
 	for (const guid of guids ?? []) {
@@ -57,6 +59,9 @@ export async function fetchPlexWatchlist(
 
 	while (start < total) {
 		const url = new URL(WATCHLIST_URL);
+		url.searchParams.set('includeExternalMedia', '1');
+		url.searchParams.set('includeGuids', '1');
+		url.searchParams.set('sort', 'watchlistedAt:desc');
 		url.searchParams.set('X-Plex-Container-Size', String(PAGE_SIZE));
 		url.searchParams.set('X-Plex-Container-Start', String(start));
 
@@ -95,7 +100,7 @@ export async function removeFromPlexWatchlist(
 	ratingKey: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<void> {
-	const url = new URL('https://metadata.provider.plex.tv/actions/removeFromWatchlist');
+	const url = new URL(REMOVE_FROM_WATCHLIST_URL);
 	url.searchParams.set('ratingKey', ratingKey);
 	const response = await fetchImpl(url, {
 		method: 'PUT',
