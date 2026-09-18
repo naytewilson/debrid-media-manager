@@ -3,8 +3,12 @@ import { fetchPlexWatchlist, removeFromPlexWatchlist } from '@/services/plexWatc
 import {
 	plexOnDemandState,
 	type PlexRequestState,
-	type PlexWatchlistState,
 } from '@/services/database/plexOnDemandState';
+import {
+	baselinePlexWatchlistState,
+	reconcilePlexWatchlistState,
+	type PlexBootstrapMode,
+} from '@/services/plexOnDemandWatchlist';
 import { plexOnDemandProfile } from '@/services/plexOnDemandResolver';
 import { resolvePlexMovie } from '@/services/plexOnDemandResolver';
 import type { NextApiHandler } from 'next';
@@ -26,30 +30,6 @@ function due(item: PlexRequestState, now: number): boolean {
 	return false;
 }
 
-function baselineState(
-	items: Awaited<ReturnType<typeof fetchPlexWatchlist>>,
-	mode: string
-): PlexWatchlistState {
-	const initializedAt = nowIso();
-	const records: Record<string, PlexRequestState> = {};
-	const movies = items.filter((item) => item.type === 'movie');
-	const newestRatingKey = mode === 'latest' ? movies[0]?.ratingKey : undefined;
-
-	for (const item of movies) {
-		const shouldResolve = mode === 'all' || item.ratingKey === newestRatingKey;
-		records[item.ratingKey] = {
-			ratingKey: item.ratingKey,
-			title: item.title,
-			imdbId: item.imdbId,
-			status: shouldResolve ? (item.imdbId ? 'retry' : 'unsupported') : 'seen',
-			attempts: 0,
-			updatedAt: initializedAt,
-			nextAttemptAt: shouldResolve && item.imdbId ? initializedAt : undefined,
-		};
-	}
-	return { version: 1, initializedAt, items: records };
-}
-
 const handler: NextApiHandler = async (req, res) => {
 	if (req.method !== 'POST') {
 		res.setHeader('Allow', 'POST');
@@ -69,17 +49,18 @@ const handler: NextApiHandler = async (req, res) => {
 	}
 
 	const accountId = process.env.PLEX_ON_DEMAND_ACCOUNT_ID || 'default';
-	const bootstrap = process.env.PLEX_ON_DEMAND_BOOTSTRAP || 'baseline';
+	const bootstrapValue = process.env.PLEX_ON_DEMAND_BOOTSTRAP;
+	const bootstrap: PlexBootstrapMode =
+		bootstrapValue === 'latest' || bootstrapValue === 'all' ? bootstrapValue : 'baseline';
 	const autoRemove = process.env.PLEX_ON_DEMAND_AUTO_REMOVE === 'true';
 
 	try {
 		const watchlist = await fetchPlexWatchlist(plexToken);
 		const movies = watchlist.filter((item) => item.type === 'movie');
-		const currentKeys = new Set(movies.map((item) => item.ratingKey));
 
 		let state = await plexOnDemandState.get(accountId);
 		if (!state) {
-			state = baselineState(movies, bootstrap);
+			state = baselinePlexWatchlistState(movies, bootstrap, nowIso());
 			await plexOnDemandState.put(accountId, state);
 			if (bootstrap === 'baseline') {
 				res.status(200).json({
@@ -91,25 +72,7 @@ const handler: NextApiHandler = async (req, res) => {
 			}
 		}
 
-		// Removal is meaningful: once a ratingKey leaves Plex, forget it. A later
-		// re-add becomes a new request instead of being permanently suppressed.
-		for (const key of Object.keys(state.items)) {
-			if (!currentKeys.has(key)) delete state.items[key];
-		}
-
-		for (const item of movies) {
-			if (!state.items[item.ratingKey]) {
-				state.items[item.ratingKey] = {
-					ratingKey: item.ratingKey,
-					title: item.title,
-					imdbId: item.imdbId,
-					status: item.imdbId ? 'retry' : 'unsupported',
-					attempts: 0,
-					updatedAt: nowIso(),
-					nextAttemptAt: item.imdbId ? nowIso() : undefined,
-				};
-			}
-		}
+		reconcilePlexWatchlistState(state, movies, nowIso());
 
 		const now = Date.now();
 		const candidate = movies
