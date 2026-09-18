@@ -1,5 +1,9 @@
 import { hasLocalCapability } from '@/utils/localCapabilityAuth';
-import {\n\tfetchPlexWatchlist,\n\tPlexWatchlistRateLimitError,\n\tremoveFromPlexWatchlist,\n} from '@/services/plexWatchlist';
+import {
+	fetchPlexWatchlist,
+	PlexWatchlistRateLimitError,
+	removeFromPlexWatchlist,
+} from '@/services/plexWatchlist';
 import {
 	plexOnDemandState,
 	type PlexRequestState,
