@@ -78,6 +78,12 @@ PLEX_ON_DEMAND_AUTO_REMOVE=false
 
 The Plex token is sent to Plex in `X-Plex-Token`, not a query string. The RD token is never accepted from a request body and neither credential is returned by these endpoints.
 
+## Polling behavior
+
+The local trigger may poll frequently for responsive Plex clients, but an unchanged Watchlist poll is read-only after reconciliation and does not rewrite durable state. If Plex Discover responds with HTTP 429, DMM preserves the upstream `Retry-After` as a local 429 so the media-fabric trigger can back off instead of retrying at its normal cadence.
+
+This keeps the request path responsive without converting a temporary Plex throttle into a retry storm.
+
 ## Boundary
 
 DMM resolves and admits media. It does not own media-fabric catalog truth or Plex filesystem publication. Zurg's existing library-update hook remains the event that synchronizes media-fabric and performs the scoped Plex refresh.
