@@ -27,6 +27,28 @@ const PLEX_DISCOVER_ORIGIN = 'https://discover.provider.plex.tv';
 const WATCHLIST_URL = `${PLEX_DISCOVER_ORIGIN}/library/sections/watchlist/all`;
 const REMOVE_FROM_WATCHLIST_URL = `${PLEX_DISCOVER_ORIGIN}/actions/removeFromWatchlist`;
 const PAGE_SIZE = 100;
+const DEFAULT_RETRY_AFTER_SECONDS = 60;
+
+export class PlexWatchlistRateLimitError extends Error {
+	readonly retryAfterSeconds: number;
+
+	constructor(retryAfterSeconds: number) {
+		super('Plex watchlist rate limited');
+		this.name = 'PlexWatchlistRateLimitError';
+		this.retryAfterSeconds = retryAfterSeconds;
+	}
+}
+
+function retryAfterSeconds(header: string | null): number {
+	if (!header) return DEFAULT_RETRY_AFTER_SECONDS;
+	const seconds = Number.parseInt(header, 10);
+	if (Number.isFinite(seconds) && seconds >= 0) return Math.max(1, seconds);
+	const at = Date.parse(header);
+	if (!Number.isNaN(at)) {
+		return Math.max(1, Math.ceil((at - Date.now()) / 1000));
+	}
+	return DEFAULT_RETRY_AFTER_SECONDS;
+}
 
 export function imdbIdFromPlexGuids(guids: PlexGuid[] | undefined): string | undefined {
 	for (const guid of guids ?? []) {
@@ -73,6 +95,9 @@ export async function fetchPlexWatchlist(
 			},
 			signal: AbortSignal.timeout(10_000),
 		});
+		if (response.status === 429) {
+			throw new PlexWatchlistRateLimitError(retryAfterSeconds(response.headers.get('Retry-After')));
+		}
 		if (!response.ok) {
 			throw new Error(`Plex watchlist request failed: HTTP ${response.status}`);
 		}
