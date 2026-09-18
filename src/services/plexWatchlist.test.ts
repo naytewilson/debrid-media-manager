@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
 	fetchPlexWatchlist,
 	imdbIdFromPlexGuids,
+	PlexWatchlistRateLimitError,
 	removeFromPlexWatchlist,
 } from './plexWatchlist';
 
@@ -54,6 +55,29 @@ describe('Plex watchlist client', () => {
 				imdbId: 'tt0111161',
 			},
 		]);
+	});
+
+
+	it('surfaces Plex 429 retry-after without retrying blindly', async () => {
+		const fetchMock = vi.fn(async () => {
+			return {
+				ok: false,
+				status: 429,
+				headers: new Headers({ 'Retry-After': '37' }),
+			} as Response;
+		});
+
+		await expect(fetchPlexWatchlist('secret', fetchMock as typeof fetch)).rejects.toMatchObject({
+			name: 'PlexWatchlistRateLimitError',
+			retryAfterSeconds: 37,
+		});
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+
+		try {
+			await fetchPlexWatchlist('secret', fetchMock as typeof fetch);
+		} catch (error) {
+			expect(error).toBeInstanceOf(PlexWatchlistRateLimitError);
+		}
 	});
 
 	it('removes items through the Discover watchlist action without leaking the token', async () => {
