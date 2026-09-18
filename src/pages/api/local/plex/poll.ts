@@ -72,7 +72,7 @@ const handler: NextApiHandler = async (req, res) => {
 			}
 		}
 
-		reconcilePlexWatchlistState(state, movies, nowIso());
+		const stateChanged = reconcilePlexWatchlistState(state, movies, nowIso());
 
 		const now = Date.now();
 		const candidate = movies
@@ -80,7 +80,7 @@ const handler: NextApiHandler = async (req, res) => {
 			.find((item) => item && item.imdbId && due(item, now));
 
 		if (!candidate?.imdbId) {
-			await plexOnDemandState.put(accountId, state);
+			if (stateChanged) await plexOnDemandState.put(accountId, state);
 			res.status(200).json({ status: 'idle', movieCount: movies.length });
 			return;
 		}
