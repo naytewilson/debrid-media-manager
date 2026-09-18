@@ -68,6 +68,20 @@ describe('Plex on-demand watchlist state', () => {
 		expect(state.items.existing.nextAttemptAt).toBeUndefined();
 	});
 
+
+	it('reports an unchanged idle poll so callers can avoid a database write', () => {
+		const now = '2026-09-18T00:00:00.000Z';
+		const later = '2026-09-18T00:01:00.000Z';
+		const state = baselinePlexWatchlistState([movie('existing', 'tt0111161')], 'baseline', now);
+		const changed = reconcilePlexWatchlistState(
+			state,
+			[movie('existing', 'tt0111161')],
+			later
+		);
+		expect(changed).toBe(false);
+		expect(state.items.existing.updatedAt).toBe(now);
+	});
+
 	it('forgets removed items so a later re-add is a fresh request', () => {
 		const now = '2026-09-18T00:00:00.000Z';
 		const later = '2026-09-18T00:01:00.000Z';
