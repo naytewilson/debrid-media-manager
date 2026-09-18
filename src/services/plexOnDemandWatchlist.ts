@@ -39,14 +39,18 @@ export function reconcilePlexWatchlistState(
 	state: PlexWatchlistState,
 	items: PlexWatchlistItem[],
 	now: string
-): void {
+): boolean {
 	const movies = moviesOnly(items);
 	const currentKeys = new Set(movies.map((item) => item.ratingKey));
+	let changed = false;
 
 	// Removal is intentional. Forgetting the state means a later re-add becomes
 	// a fresh request rather than staying permanently suppressed.
 	for (const key of Object.keys(state.items)) {
-		if (!currentKeys.has(key)) delete state.items[key];
+		if (!currentKeys.has(key)) {
+			delete state.items[key];
+			changed = true;
+		}
 	}
 
 	for (const item of movies) {
@@ -61,6 +65,7 @@ export function reconcilePlexWatchlistState(
 				updatedAt: now,
 				nextAttemptAt: item.imdbId ? now : undefined,
 			};
+			changed = true;
 			continue;
 		}
 
@@ -68,10 +73,15 @@ export function reconcilePlexWatchlistState(
 		// existing record when the IMDb GUID appears later. A record that was
 		// explicitly unsupported becomes due immediately; baseline "seen"
 		// records stay seen so first boot never turns into a surprise bulk import.
-		existing.title = item.title;
+		if (existing.title !== item.title) {
+			existing.title = item.title;
+			existing.updatedAt = now;
+			changed = true;
+		}
 		if (!existing.imdbId && item.imdbId) {
 			existing.imdbId = item.imdbId;
 			existing.updatedAt = now;
+			changed = true;
 			if (existing.status === 'unsupported') {
 				existing.status = 'retry';
 				existing.nextAttemptAt = now;
@@ -79,4 +89,6 @@ export function reconcilePlexWatchlistState(
 			}
 		}
 	}
+
+	return changed;
 }
