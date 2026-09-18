@@ -54,12 +54,13 @@ The resolver:
 1. reads the complete trusted DMM release row plus current scrape candidates;
 2. first-fills/refreshes through DMM's existing Debridio integration where configured;
 3. admits only hashes DMM currently records as Real-Debrid cached;
-4. rejects obvious CAM/telesync/screener sources;
-5. scores resolution, source, HDR/DV, audio, codec and DMM-native MiB size;
-6. attempts at most five ranked candidates;
-7. selects the largest playable video file rather than blindly selecting extras;
-8. requires the RD item to become `downloaded` quickly;
-9. deletes a failed/non-instant attempt before trying the next candidate.
+4. stays local-first by default; external DMM corpus fallback is disabled unless `PLEX_ON_DEMAND_UPSTREAM_DMM_ORIGIN` is explicitly set;
+5. rejects obvious CAM/telesync/screener sources;
+6. scores resolution, source, HDR/DV, audio, codec and DMM-native MiB size;
+7. attempts at most five ranked candidates;
+8. selects the largest playable video file rather than blindly selecting extras;
+9. requires the RD item to become `downloaded` quickly;
+10. deletes a failed/non-instant attempt before trying the next candidate.
 
 ## Required environment
 
@@ -71,6 +72,8 @@ PLEX_ON_DEMAND_ACCOUNT_ID=default
 PLEX_ON_DEMAND_PROFILE=quality
 PLEX_ON_DEMAND_BOOTSTRAP=baseline
 PLEX_ON_DEMAND_AUTO_REMOVE=false
+# Optional external corpus; disabled unless set:
+# PLEX_ON_DEMAND_UPSTREAM_DMM_ORIGIN=https://debridmediamanager.com
 ```
 
 The Plex token is sent to Plex in `X-Plex-Token`, not a query string. The RD token is never accepted from a request body and neither credential is returned by these endpoints.
